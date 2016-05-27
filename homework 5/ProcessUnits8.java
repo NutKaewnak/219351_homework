@@ -19,29 +19,40 @@ import org.apache.hadoop.mapreduce.lib.join.Parser;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 
 public class ProcessUnits8 {
-    public static class NodeToChildMapper extends Mapper<Text, Text, LongWritable, LongWritable>{
+    public static class NodeToChildMapper extends Mapper<Text, Text, Text, Text>{
         public static final Log log = LogFactory.getLog(NodeToChildMapper.class);
         public void map(Text key, Text value, Context context) throws IOException, InterruptedException {
-            LongWritable long_key = new LongWritable(Long.parseLong(value.toString()));
-            LongWritable val = new LongWritable(Long.parseLong(value.toString()));
-            context.write(long_key, val);
+            context.write(key, value);
         }
     }
 
-    public static class NodeToChildReducer extends Reducer<LongWritable, LongWritable, LongWritable, LongWritable> {
-        public void reduce(LongWritable key, Iterable<LongWritable> values, Context context)
+    public static class NodeToChildCombiner extends Reducer<Text, Text, Text, Text> {
+        public void reduce(Text key, Iterable<Text> values, Context context)
                 throws IOException, InterruptedException
         {
-            LinkedList<LongWritable> list = new LinkedList<LongWritable>();
-            list.add(new LongWritable(Long.parseLong(key.toString())));
+            LinkedList<Text> list = new LinkedList<Text>();
+            list.add(key);
             @SuppressWarnings("unchecked")
-            Collection<LongWritable> val_arr = IteratorUtils.toList(values.iterator());
+            Collection<Text> val_arr = IteratorUtils.toList(values.iterator());
             list.addAll(val_arr);
-            for (LongWritable child_i : list){
-                for (LongWritable child_j : list){
+            for (Text child_i : list){
+                for (Text child_j : list){
                     context.write(child_i, child_j);
                 }
             }
+        }
+    }
+
+    public static class NodeToChildReducer extends Reducer<Text, Text, Text, Text> {
+        public void reduce(Text key, Iterable<Text> values, Context context)
+                throws IOException, InterruptedException
+        {
+            String out = "";
+            for (Text val : values) {
+                out += " " + val.toString();
+            }
+            Text result = new Text(out);
+            context.write(key, result);
         }
     }
 
@@ -52,11 +63,11 @@ public class ProcessUnits8 {
 
         job.setJarByClass(ProcessUnits8.class);
         job.setMapperClass(NodeToChildMapper.class);
-        job.setCombinerClass(NodeToChildReducer.class);
+        job.setCombinerClass(NodeToChildCombiner.class);
         job.setReducerClass(NodeToChildReducer.class);
 
-        job.setOutputKeyClass(LongWritable.class);
-        job.setOutputValueClass(LongWritable.class);
+        job.setOutputKeyClass(Text.class);
+        job.setOutputValueClass(Text.class);
 
         FileInputFormat.addInputPath(job, new Path(args[0]));
         FileOutputFormat.setOutputPath(job, new Path(args[1]));
@@ -66,3 +77,4 @@ public class ProcessUnits8 {
         System.exit(job.waitForCompletion(true) ? 0 : 1);
     }
 }
+
